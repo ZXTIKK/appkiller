@@ -6,15 +6,17 @@
 #define ID_AFK_MODE_OFF 1011
 #define ID_TRAY_SHOW 1001
 #define ID_TRAY_EXIT 1002
+#define ID_CHECK_UPDATES 1003
 #define ID_PROGRAM_BASE 1012
+
+#define NO_ACTION 0
+
+#define ABOUT_SEARCH 2000
+#define UPDATE_NOW 2001
 
 namespace TrayUtils {
 
     Tray::Tray(const ReadSettings& settings) : readSettings(settings) {
-        ZeroMemory(&m_nid, sizeof(m_nid));
-    }
-
-    Tray::Tray() : readSettings(ReadSettings()) {
         ZeroMemory(&m_nid, sizeof(m_nid));
     }
 
@@ -56,10 +58,12 @@ namespace TrayUtils {
 
             if (cmdId == ID_AFK_MODE_ON) {
                 std::cout << "AFK ON\n" << std::endl;
+                afkMode = !afkMode;
                 preventSleep();
             }
             else if (cmdId == ID_AFK_MODE_OFF) {
                 std::cout << "AFK OFF\n" << std::endl;
+                afkMode = !afkMode;
                 allowSleep();
             }
             else if (cmdId == ID_TRAY_EXIT) {
@@ -74,6 +78,13 @@ namespace TrayUtils {
                 }
                 std::string command = "\"" + program.path + "\"";
                 WinExec(command.c_str(), SW_HIDE);
+            }
+            else if (cmdId == ABOUT_SEARCH) {
+                std::string url = this->readSettings.getUpdater().aboutUrl;
+                ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+            }
+            else if (cmdId == UPDATE_NOW) {
+                updateNow();
             }
             break;
         }
@@ -145,14 +156,49 @@ namespace TrayUtils {
         GetCursorPos(&pt);
 
         HMENU hMenu = CreatePopupMenu();
-        AppendMenuW(hMenu, MF_STRING, ID_AFK_MODE_ON, L"AFK MODE");
-        AppendMenuW(hMenu, MF_STRING, ID_AFK_MODE_OFF, L"Exit AFK MODE");
-        AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+        HMENU hUpdateMenu = CreatePopupMenu();
+
+        if (this->readSettings.getUpdater().isDone && this->readSettings.getUpdater().error.empty()) {
+            if (this->readSettings.getUpdater().canUpdate) {
+                std::wstring curVer = L"Current version: " + utf8ToWstring(this->readSettings.getUpdater().nowVersion.c_str());
+                std::wstring newVer = L"New version: " + utf8ToWstring(this->readSettings.getUpdater().newVersion.c_str());
+
+                AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, curVer.c_str());
+                AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, newVer.c_str());
+                AppendMenuW(hUpdateMenu, MF_STRING , ABOUT_SEARCH, L"What's new?");
+                AppendMenuW(hUpdateMenu, MF_STRING, UPDATE_NOW, L"Update now");
+
+            }else {
+                std::wstring info = L"You have the latest version.";
+                std::wstring aboutSearch = L"About";
+
+                AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, info.c_str());
+                AppendMenuW(hUpdateMenu, MF_STRING , ABOUT_SEARCH, aboutSearch.c_str());
+            }
+        }else if (!this->readSettings.getUpdater().error.empty()) {
+            std::wstring error = L"ERROR: " + utf8ToWstring(this->readSettings.getUpdater().error.c_str());
+            AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, error.c_str());
+        }else{
+            AppendMenuW(hUpdateMenu, MF_STRING, NO_ACTION, L"We are loading the data...");
+            AppendMenuW(hUpdateMenu, MF_STRING, NO_ACTION, L"Please check back later.");
+        }
+
+        if (!afkMode) {
+            AppendMenuW(hMenu, MF_STRING, ID_AFK_MODE_ON, L"AFK mode on");
+        }else {
+            AppendMenuW(hMenu, MF_STRING, ID_AFK_MODE_OFF, L"AFK mode off");
+        }
+        AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
         for (int i = 0; i < this->readSettings.getPrograms().size(); i++) {
             AppendMenuW(hMenu, MF_STRING, ID_PROGRAM_BASE+i, utf8ToWstring(this->readSettings.getPrograms().at(i).name.c_str()).c_str());
         }
-        AppendMenuW(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
         AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Выйти");
+        AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
+        AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hUpdateMenu, L"Update");
+        AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
+
+
 
         SetForegroundWindow(m_hwnd);
         TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, m_hwnd, NULL);
@@ -168,5 +214,79 @@ namespace TrayUtils {
             DestroyWindow(m_hwnd);
             m_hwnd = NULL;
         }
+    }
+
+
+    void Tray::updateNow() {
+        auto updater = this->readSettings.getUpdater();
+        bool canRun = updater.isDone && updater.canUpdate && !updater.downloadUrl.empty();
+
+        if (!canRun) {
+            std::cout << "Error: " << updater.error << std::endl;
+            return;
+        }
+
+        auto downloadUrl = updater.downloadUrl;
+
+        std::cout << "Process Update..." << std::endl;
+        std::thread([downloadUrl]() {
+            namespace fs = std::filesystem;
+            try {
+                const wchar_t* appData = _wgetenv(L"APPDATA");
+                fs::path pathOutput;
+                if (appData) {
+                    pathOutput = fs::path(appData) / "Zxnt" / "updateBin" ;
+                }
+                if (!fs::exists(pathOutput)) {
+                    fs::create_directories(pathOutput);
+                }
+                fs::path fileName = "Update.exe";
+                auto fullPath = pathOutput / fileName;
+                std::ofstream outFile(fullPath, std::ios::trunc | std::ios::binary);
+                if (!outFile.is_open()) {
+                    std::cerr << "Unable to open file: " << fullPath << std::endl;
+                    return;
+                }
+                std::cout << "Download..." << std::endl;
+                cpr::Response r = cpr::Get(
+                    cpr::Url(downloadUrl),
+                    cpr::Header{{"User-Agent", "MyAppUpdater/1.0"}},
+                    cpr::Redirect{true},
+                    cpr::WriteCallback{[&outFile](std::string_view data, intptr_t userdata) -> bool {
+                        outFile.write(data.data(), data.size());
+                        return true;
+                    }}
+                );
+                outFile.close();
+
+                if (r.status_code != 200) {
+                    std::cerr << "Ошибка скачивания. Код ответа HTTP: " << r.status_code << std::endl;
+                    std::cerr << "CPR Error: " << r.error.message << std::endl;
+                    fs::remove(fullPath);
+                    return;
+                }
+
+                std::cout << "Файл успешно сохранен: " << fullPath << std::endl;
+
+                std::wstring wFullPath = fullPath.wstring();
+
+                INT_PTR res = (INT_PTR)ShellExecuteW(
+                    NULL,
+                    L"open",
+                    fullPath.c_str(),
+                    L"/S",
+                    NULL,
+                    SW_SHOWNORMAL
+                );
+
+                if (res > 32) {
+                    ExitProcess(0);
+                }
+
+            }catch (std::exception& e) {
+                std::cerr << e.what() << std::endl;
+            }
+        }).detach();
+
     }
 }

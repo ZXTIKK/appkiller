@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "lib/readSettings.h"
 #include "lib/trayRender.h"
 
@@ -54,7 +56,18 @@ int main() {
         relaunchAsAdmin();
     }
 
-    std::unique_ptr<TrayUtils::ReadSettings> settings = std::make_unique<TrayUtils::ReadSettings>();
+    auto settings = std::make_unique<TrayUtils::ReadSettings>([](const ResUpdater& updater) {
+        std::cout << "CAN_UPDATE: " << updater.canUpdate << std::endl;
+        std::cout << "NOW: " << updater.nowVersion << std::endl;
+        std::cout << "NEW: " << updater.newVersion << std::endl;
+        std::cout << "URL_ABOUT: " << updater.aboutUrl << std::endl;
+        std::cout << "URL_DOWNLOAD " << updater.downloadUrl << std::endl;
+
+        if (updater.canUpdate) {
+            std::cout << "UPDATE FOUND" << std::endl;
+        }
+        std::cout << std::endl << std::endl << "ERROR: " << updater.error << std::endl;
+    });
 
     TrayUtils::Tray tray(*settings);
     tray.trayRender();

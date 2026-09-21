@@ -6,13 +6,18 @@
 #define UTILS_UTILS_H
 #include <windows.h>
 #include <shellapi.h>
+#include <thread>
 
-inline void preventSleep(bool preventScreenOff = true) {
-    EXECUTION_STATE flags = ES_CONTINUOUS | ES_SYSTEM_REQUIRED;
+#include <cpr/cpr.h>
+#include "version.h"
+#include <nlohmann/json.hpp>
 
-    if (preventScreenOff) {
-        flags |= ES_DISPLAY_REQUIRED;
-    }
+using json = nlohmann::json;
+
+inline void preventSleep() {
+    EXECUTION_STATE flags = ES_DISPLAY_REQUIRED;
+    flags |= ES_CONTINUOUS;
+    flags |= ES_SYSTEM_REQUIRED;
 
     SetThreadExecutionState(flags);
 }
@@ -59,4 +64,29 @@ inline bool executeSynchronous(const std::string& cmd) {
     }
     return false;
 }
+
+inline int checkVersion(std::string version) {
+    if (version.empty()) return 0;
+    std::string cleanV;
+    std::vector<char> allowChar{'0','1','2','3','4','5','6','7','8','9'};
+
+    for (char c : version) {
+        auto iterator = std::find(allowChar.begin(), allowChar.end(), c);
+        if (iterator != allowChar.end()) {
+            cleanV.push_back(c);
+        }
+    }
+    return std::stoi(cleanV);
+}
+
+struct ResUpdater {
+    std::string nowVersion;
+    std::string newVersion;
+    std::string aboutUrl;
+    std::string error;
+    std::string downloadUrl;
+    bool canUpdate;
+    bool isDone = false;
+};
+
 #endif //UTILS_UTILS_H

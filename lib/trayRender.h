@@ -9,12 +9,15 @@
 namespace TrayUtils {
     class Tray {
     private:
-        ReadSettings readSettings;
+        const ReadSettings& readSettings;
         HWND m_hwnd{nullptr};
         NOTIFYICONDATAW m_nid{};
 
         static LRESULT CALLBACK WndProcSetup(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
         LRESULT handleMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+        bool afkMode = false;
+
+        void updateNow();
 
     public:
         explicit Tray(const ReadSettings& settings);
