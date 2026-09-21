@@ -26,6 +26,7 @@ TrayUtils::ReadSettings::ReadSettings(std::function<void(const ResUpdater&)> onC
 
 void TrayUtils::ReadSettings::init() {
     try {
+        this->restartPrograms = std::vector<TrayUtils::ProgramsRestart>{};
         fs::path path;
 #if defined(_WIN32)
         const wchar_t* appData = _wgetenv(L"APPDATA");
@@ -81,6 +82,7 @@ void TrayUtils::ReadSettings::init() {
                 }
             }
         }
+        fileConfig.close();
     } catch (const std::exception& e) {}
 }
 
@@ -131,6 +133,8 @@ void TrayUtils::ReadSettings::startUpdateCheckAsync(std::function<void(const Res
                         if (res.contains("html_url")) {
                             localResult.aboutUrl = res.value("html_url", "https://github.com/ZXTIKK/appkiller/releases");
                         }
+                    }else {
+                        localResult.aboutUrl = "https://github.com/ZXTIKK/appkiller/releases";
                     }
                 } else {
                     localResult.error = "Tag 'tag_name' missing in JSON response";

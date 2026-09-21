@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <thread>
+#include <iostream>
 
 #include <cpr/cpr.h>
 #include "version.h"
@@ -14,10 +15,20 @@
 
 using json = nlohmann::json;
 
+struct ResUpdater {
+    std::string nowVersion;
+    std::string newVersion;
+    std::string aboutUrl;
+    std::string error;
+    std::string downloadUrl;
+    bool canUpdate;
+    bool isDone = false;
+};
+
 inline void preventSleep() {
-    EXECUTION_STATE flags = ES_DISPLAY_REQUIRED;
-    flags |= ES_CONTINUOUS;
-    flags |= ES_SYSTEM_REQUIRED;
+    EXECUTION_STATE flags = ES_CONTINUOUS |
+        ES_DISPLAY_REQUIRED |
+        ES_SYSTEM_REQUIRED;
 
     SetThreadExecutionState(flags);
 }
@@ -79,14 +90,14 @@ inline int checkVersion(std::string version) {
     return std::stoi(cleanV);
 }
 
-struct ResUpdater {
-    std::string nowVersion;
-    std::string newVersion;
-    std::string aboutUrl;
-    std::string error;
-    std::string downloadUrl;
-    bool canUpdate;
-    bool isDone = false;
-};
+namespace fs = std::filesystem;
+
+inline void editConfig() {
+    const wchar_t* appData = _wgetenv(L"APPDATA");
+    auto path = fs::path(appData) / "Zxnt" / "config.json";
+    std::cout << path << std::endl;
+    auto res = ShellExecuteW(NULL, L"open", L"notepad.exe", path.c_str(), NULL, SW_SHOWDEFAULT);
+    std::cout << res << std::endl;
+}
 
 #endif //UTILS_UTILS_H

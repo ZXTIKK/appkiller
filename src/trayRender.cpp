@@ -7,6 +7,9 @@
 #define ID_TRAY_SHOW 1001
 #define ID_TRAY_EXIT 1002
 #define ID_CHECK_UPDATES 1003
+#define EDIT_CONFIG 1004
+#define UPLOAD_CONFIG 1005
+
 #define ID_PROGRAM_BASE 1012
 
 #define NO_ACTION 0
@@ -58,12 +61,12 @@ namespace TrayUtils {
 
             if (cmdId == ID_AFK_MODE_ON) {
                 std::cout << "AFK ON\n" << std::endl;
-                afkMode = !afkMode;
+                afkMode = true;
                 preventSleep();
             }
             else if (cmdId == ID_AFK_MODE_OFF) {
                 std::cout << "AFK OFF\n" << std::endl;
-                afkMode = !afkMode;
+                afkMode = false;
                 allowSleep();
             }
             else if (cmdId == ID_TRAY_EXIT) {
@@ -81,10 +84,22 @@ namespace TrayUtils {
             }
             else if (cmdId == ABOUT_SEARCH) {
                 std::string url = this->readSettings.getUpdater().aboutUrl;
-                ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                if (!url.empty()) {
+                    if (url.find("http://") != 0 && url.find("https://") != 0) {
+                        url = "https://" + url;
+                    }
+                    ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                    std::cout << url << std::endl;
+                }else
+                {
+                    std::cout << url << std::endl;
+                }
             }
             else if (cmdId == UPDATE_NOW) {
                 updateNow();
+            }
+            else if (cmdId == EDIT_CONFIG) {
+                editConfig();
             }
             break;
         }
@@ -170,9 +185,11 @@ namespace TrayUtils {
 
             }else {
                 std::wstring info = L"You have the latest version.";
+                std::wstring version = L"Version: " + utf8ToWstring(this->readSettings.getUpdater().nowVersion.c_str());
                 std::wstring aboutSearch = L"About";
 
                 AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, info.c_str());
+                AppendMenuW(hUpdateMenu, MF_STRING , NO_ACTION, version.c_str());
                 AppendMenuW(hUpdateMenu, MF_STRING , ABOUT_SEARCH, aboutSearch.c_str());
             }
         }else if (!this->readSettings.getUpdater().error.empty()) {
@@ -193,9 +210,11 @@ namespace TrayUtils {
             AppendMenuW(hMenu, MF_STRING, ID_PROGRAM_BASE+i, utf8ToWstring(this->readSettings.getPrograms().at(i).name.c_str()).c_str());
         }
         AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
-        AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Выйти");
+        AppendMenuW(hMenu, MF_STRING, EDIT_CONFIG, L"Edit configuration");
         AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
         AppendMenuW(hMenu, MF_POPUP, (UINT_PTR)hUpdateMenu, L"Update");
+        AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
+        AppendMenuW(hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
         AppendMenuW(hMenu, MF_SEPARATOR, NO_ACTION, NULL);
 
 

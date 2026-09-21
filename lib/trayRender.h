@@ -23,7 +23,6 @@ namespace TrayUtils {
         explicit Tray(const ReadSettings& settings);
         Tray();
         ~Tray();
-
         void trayRender();
         void trayOnClick();
         void removeTray();
